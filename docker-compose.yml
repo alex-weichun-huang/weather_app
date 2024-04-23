@@ -1,0 +1,113 @@
+version: '3'
+
+services:
+  
+  weather-app:
+    image: base-image
+    container_name:  weather-app
+    networks:
+      - my-network
+    volumes:
+      - ./files:/files
+    deploy:
+      resources:
+        limits:
+          memory: 16g
+        reservations:
+          memory: 16g
+    environment:
+      JAVA_HOME:  /usr/lib/jvm/java-11-openjdk-amd64
+      SPARK_DIST_CLASSPATH: /spark-3.5.1-bin-hadoop3/jars
+      PATH: "${PATH}:/spark-3.5.1-bin-hadoop3/bin"
+    command: [ "/bin/bash", "-c", "while true; do sleep 30; done" ]
+  
+  producer:
+    image: base-image
+    container_name: producer
+    networks:
+      - my-network
+    volumes:
+      - ./files:/files
+    depends_on:
+      - kafka1
+      - kafka2
+    command: sh -c "sleep 20 && python3 /files/producer.py"
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    container_name: zookeeper
+    ports:
+      - "22181:2181"
+    networks:
+      - my-network
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka1:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka1
+    hostname: kafka1
+    networks:
+      - my-network
+    depends_on:
+      - zookeeper
+    volumes:
+      - ./files:/files
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://:9091
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka1:9091
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+  
+  kafka2:
+    image: confluentinc/cp-kafka:latest
+    container_name: kafka2
+    hostname: kafka2
+    networks:
+      - my-network
+    depends_on:
+      - zookeeper
+    volumes:
+      - ./files:/files
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://:9092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka2:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 2
+     
+  cassandra1:
+    image: base-image
+    container_name: cassandra1
+    hostname: cassandra1
+    networks:
+      - my-network
+    volumes:
+      - ./files:/files
+    environment:
+      NATIVE_TRANSPORT_PORT: 9041
+      PATH: "${PATH}:/apache-cassandra-4.1.3/bin"
+    command: sh -c "bash /files/cassandra.sh"
+  
+  cassandra2:
+    image: base-image
+    container_name: cassandra2
+    hostname: cassandra2
+    networks:
+      - my-network
+    volumes:
+      - ./files:/files
+    environment:
+      NATIVE_TRANSPORT_PORT: 9042
+      PATH: "${PATH}:/apache-cassandra-4.1.3/bin"
+    command: sh -c "bash /files/cassandra.sh"
+  
+networks:
+  my-network:
+    driver: bridge
